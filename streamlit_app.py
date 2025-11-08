@@ -189,6 +189,9 @@ def process_document(uploaded_file, components):
             
             session.commit()
             st.info(f"✅ Saved document and {len(chunks)} chunks to database")
+            
+            # Store doc_id before session closes
+            doc_id = doc.id
         
         # Save index
         index_manager.save_index()
@@ -199,7 +202,7 @@ def process_document(uploaded_file, components):
         
         return {
             'success': True,
-            'doc_id': doc.id,
+            'doc_id': doc_id,
             'filename': uploaded_file.name,
             'chunks': len(chunks)
         }
