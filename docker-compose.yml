@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  rag-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-document-qa
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=RAG Document Q&A System
+      - DEBUG=False
+      - LOG_LEVEL=INFO
+      - LLM_PROVIDER=remote
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=gpt-3.5-turbo
+      - EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+      - CHUNK_SIZE=1000
+      - CHUNK_OVERLAP=200
+      - TOP_K_RESULTS=5
+      - DATABASE_URL=sqlite:///data/database.db
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Streamlit UI
+  streamlit-ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag-streamlit-ui
+    ports:
+      - "8501:8501"
+    environment:
+      - API_URL=http://rag-api:8000
+    depends_on:
+      - rag-api
+    restart: unless-stopped
+
+networks:
+  default:
+    name: rag-network

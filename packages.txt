@@ -1,0 +1,13 @@
+# System packages required for Streamlit Cloud deployment
+# These are apt packages that will be installed before Python packages
+
+# Required for PyMuPDF (PDF processing)
+libmupdf-dev
+mupdf
+mupdf-tools
+
+# Required for python-magic
+libmagic1
+
+# Required for better performance
+build-essential
