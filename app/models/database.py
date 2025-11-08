@@ -2,14 +2,16 @@
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Float, JSON
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker, Session
+from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker, Session, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
 
 from app.config import settings
 from app.utils.logger import app_logger as logger
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    """Base class for all database models."""
+    pass
 
 
 class Document(Base):
