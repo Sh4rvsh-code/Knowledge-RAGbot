@@ -1,6 +1,10 @@
 # Streamlit UI
 streamlit>=1.29.0
 
+# Data Validation
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+
 # Vector Search and Embeddings (Python 3.13 compatible)
 sentence-transformers>=2.2.2
 faiss-cpu>=1.9.0
@@ -22,3 +26,4 @@ transformers>=4.35.0
 # Utilities
 python-dotenv>=1.0.0
 loguru>=0.7.0
+aiofiles>=23.0.0
