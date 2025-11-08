@@ -243,9 +243,8 @@ def answer_question(query, top_k, min_score, components):
                 'processing_time': (datetime.now() - start_time).total_seconds()
             }
         
-        # Generate answer
-        context_text = retriever.get_context_window(results)
-        answer = orchestrator.answer_question(query, context_text)
+        # Generate answer (pass results directly, orchestrator will build context)
+        answer = orchestrator.answer_question(query, results)
         
         processing_time = (datetime.now() - start_time).total_seconds()
         
@@ -432,13 +431,13 @@ def main():
                         
                         for i, source in enumerate(result['sources'], 1):
                             with st.expander(
-                                f"Source {i}: {source['document']} "
-                                f"(Score: {source['score']:.3f})"
+                                f"Source {i}: {source.get('filename', 'Unknown')} "
+                                f"(Score: {source.get('score', 0):.3f})"
                             ):
-                                st.text(source['chunk_text'])
+                                st.text(source.get('chunk_text', 'No text available'))
                                 st.caption(
-                                    f"Chunk #{source['chunk_index']} | "
-                                    f"Chars: {source['start_char']}-{source['end_char']}"
+                                    f"Chunk #{source.get('chunk_index', 0)} | "
+                                    f"Chars: {source.get('start_char', 0)}-{source.get('end_char', 0)}"
                                 )
                 else:
                     # Display error message
