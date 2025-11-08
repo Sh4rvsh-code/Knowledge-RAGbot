@@ -89,7 +89,7 @@ def initialize_system():
         
         # Initialize LLM
         llm = get_llm()
-        orchestrator = LLMOrchestrator(llm, settings)
+        orchestrator = LLMOrchestrator(llm)
         
         return {
             'settings': settings,
