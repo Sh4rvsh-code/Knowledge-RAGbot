@@ -39,19 +39,40 @@ class Embedder:
         logger.info(f"Loading embedding model: {self.model_name}")
         
         # Fix for PyTorch 2.0+ meta tensor issue with Python 3.13
+        import torch
+        import os
+        import warnings
+        
+        # Set environment variables before loading model
+        os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
+        os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+        os.environ['PYTORCH_JIT'] = '0'
+        
+        # Suppress warnings and disable meta device
+        warnings.filterwarnings('ignore', category=UserWarning)
+        torch.set_default_dtype(torch.float32)
+        
         try:
-            # Try loading with device='cpu' explicitly
-            self.model = SentenceTransformer(self.model_name, device='cpu')
+            # Try loading with explicit CPU device
+            logger.info("Attempting to load model with CPU device...")
+            self.model = SentenceTransformer(
+                self.model_name, 
+                device='cpu'
+            )
+            logger.info("Model loaded successfully with CPU device")
         except Exception as e:
-            logger.warning(f"Failed to load with device='cpu': {e}")
-            # Fallback: try loading without device specification
+            logger.warning(f"Failed to load with CPU device: {e}")
             try:
-                import torch
-                torch.set_default_device('cpu')
+                # Fallback: load without device specification and move to CPU
+                logger.info("Trying fallback method without device parameter...")
+                import transformers
+                transformers.logging.set_verbosity_error()
                 self.model = SentenceTransformer(self.model_name)
+                self.model = self.model.to('cpu')
+                logger.info("Model loaded with fallback method")
             except Exception as e2:
-                logger.error(f"Failed to load model: {e2}")
-                raise
+                logger.error(f"All loading methods failed: {e2}")
+                raise RuntimeError(f"Could not load embedding model {self.model_name}: {e2}")
         
         self.embedding_dimension = self.model.get_sentence_embedding_dimension()
         
