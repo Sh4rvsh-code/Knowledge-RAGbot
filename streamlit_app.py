@@ -117,8 +117,9 @@ def process_document(uploaded_file, components):
             tmp_file.write(uploaded_file.getbuffer())
             tmp_path = tmp_file.name
         
-        # Extract text
-        extractor = ExtractorFactory.get_extractor(tmp_path)
+        # Extract text using ExtractorFactory instance
+        extractor_factory = ExtractorFactory()
+        extractor = extractor_factory.get_extractor(tmp_path)
         extracted_data = extractor.extract(tmp_path)
         
         # Chunk text
