@@ -141,8 +141,21 @@ def process_document(uploaded_file, components):
         embeddings = embedder.embed_chunks([c.chunk_text for c in chunks])
         st.info(f"✅ Generated {len(embeddings)} embeddings")
         
+        # Prepare metadata for FAISS
+        metadata_list = [
+            {
+                'doc_id': temp_doc_id,
+                'chunk_index': i,
+                'chunk_text': chunk.chunk_text[:200],  # Store preview
+                'start_char': chunk.start_char,
+                'end_char': chunk.end_char,
+                **chunk.metadata
+            }
+            for i, chunk in enumerate(chunks)
+        ]
+        
         # Add to FAISS index
-        faiss_ids = index_manager.add_vectors(embeddings)
+        faiss_ids = index_manager.add_vectors(embeddings, metadata_list)
         st.info(f"✅ Added {len(faiss_ids)} vectors to FAISS index")
         
         # Save to database
