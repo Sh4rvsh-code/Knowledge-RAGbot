@@ -61,20 +61,20 @@ def initialize_system():
         os.makedirs(settings.index_dir, exist_ok=True)
         
         # Initialize database
-        db_manager = DatabaseManager(settings)
+        db_manager = DatabaseManager(settings.database_url)
         db_manager.create_tables()
         
         # Initialize embedder
-        embedder = get_embedder(settings)
+        embedder = get_embedder()
         
-        # Initialize index manager
-        index_manager = get_index_manager(settings)
+        # Initialize index manager (384 dimensions for all-MiniLM-L6-v2)
+        index_manager = get_index_manager(dimension=384)
         
         # Initialize retriever
         retriever = SemanticRetriever(embedder, index_manager, db_manager)
         
         # Initialize LLM
-        llm = get_llm(settings)
+        llm = get_llm()
         orchestrator = LLMOrchestrator(llm, settings)
         
         return {

@@ -61,10 +61,12 @@ class Settings(BaseSettings):
     # File Storage
     upload_dir: str = Field(default="data/uploads", alias="UPLOAD_DIR")
     max_upload_size_mb: int = Field(default=50, alias="MAX_UPLOAD_SIZE_MB")
+    data_dir: str = Field(default="data", alias="DATA_DIR")
     
     # FAISS Index
     faiss_index_dir: str = Field(default="data/faiss_index", alias="FAISS_INDEX_DIR")
     faiss_index_type: str = Field(default="IndexFlatIP", alias="FAISS_INDEX_TYPE")
+    index_dir: str = Field(default="data/faiss_index", alias="INDEX_DIR")  # Alias for faiss_index_dir
     
     # Database
     database_url: str = Field(default="sqlite:///data/database.db", alias="DATABASE_URL")
