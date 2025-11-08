@@ -39,7 +39,8 @@ class GeminiLLM(BaseLLM):
             max_tokens: Maximum tokens to generate
         """
         self.api_key = api_key or settings.gemini_api_key
-        self.model = model or settings.gemini_model or "gemini-pro"
+        # Updated model name for v1beta API
+        self.model = model or settings.gemini_model or "gemini-1.5-flash"
         self.default_temperature = temperature
         self.default_max_tokens = max_tokens
         
