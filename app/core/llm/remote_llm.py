@@ -173,11 +173,40 @@ def get_llm() -> BaseLLM:
     Get LLM instance based on configuration.
     
     Returns:
-        LLM instance (local or remote)
+        LLM instance (free, local, or remote)
     """
-    if settings.llm_provider == "local":
-        from app.core.llm.local_llm import get_local_llm
-        return get_local_llm()
-    else:
-        # Default to OpenAI for remote
+    provider = settings.llm_provider.lower()
+    
+    # Google Gemini (FREE with generous limits!)
+    if provider == "gemini":
+        from app.core.llm.gemini_llm import GeminiLLM
+        return GeminiLLM()
+    
+    # FREE options (no API key needed or free tier)
+    elif provider == "free":
+        from app.core.llm.free_llm import get_free_llm
+        return get_free_llm()
+    
+    elif provider == "huggingface":
+        from app.core.llm.free_llm import HuggingFaceLLM
+        return HuggingFaceLLM()
+    
+    elif provider == "local":
+        from app.core.llm.free_llm import LocalLLM
+        return LocalLLM()
+    
+    # PAID options (require API keys)
+    elif provider == "openai":
         return get_remote_llm("openai")
+    
+    elif provider == "anthropic":
+        return get_remote_llm("anthropic")
+    
+    else:
+        # Default to Gemini if API key available
+        if settings.gemini_api_key:
+            from app.core.llm.gemini_llm import GeminiLLM
+            return GeminiLLM()
+        # Otherwise use free option
+        from app.core.llm.free_llm import get_free_llm
+        return get_free_llm()

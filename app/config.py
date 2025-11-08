@@ -27,7 +27,10 @@ class Settings(BaseSettings):
     api_reload: bool = Field(default=False, alias="API_RELOAD")
     
     # LLM Configuration
-    llm_provider: Literal["local", "remote"] = Field(default="remote", alias="LLM_PROVIDER")
+    llm_provider: Literal["gemini", "openai", "anthropic", "huggingface", "local", "free"] = Field(
+        default="gemini", 
+        alias="LLM_PROVIDER"
+    )
     
     # OpenAI Configuration
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")
@@ -39,8 +42,16 @@ class Settings(BaseSettings):
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
     anthropic_model: str = Field(default="claude-3-sonnet-20240229", alias="ANTHROPIC_MODEL")
     
+    # Google Gemini Configuration (FREE with generous limits!)
+    gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
+    gemini_model: str = Field(default="gemini-pro", alias="GEMINI_MODEL")
+    
+    # Hugging Face Configuration (FREE!)
+    huggingface_api_key: str = Field(default="", alias="HUGGINGFACE_API_KEY")
+    huggingface_model: str = Field(default="google/flan-t5-xxl", alias="HUGGINGFACE_MODEL")
+    
     # Local LLM Configuration
-    local_model_name: str = Field(default="facebook/opt-1.3b", alias="LOCAL_MODEL_NAME")
+    local_model_name: str = Field(default="google/flan-t5-small", alias="LOCAL_MODEL_NAME")
     local_model_max_length: int = Field(default=512, alias="LOCAL_MODEL_MAX_LENGTH")
     
     # Embedding Model
