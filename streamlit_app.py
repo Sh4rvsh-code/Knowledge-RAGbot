@@ -122,15 +122,23 @@ def process_document(uploaded_file, components):
         extractor = extractor_factory.get_extractor(tmp_path)
         extracted_data = extractor.extract(tmp_path)
         
+        # Generate a temporary doc_id (will be replaced with actual DB id)
+        import uuid
+        temp_doc_id = str(uuid.uuid4())
+        
         # Chunk text
         chunker = RecursiveChunker(
             chunk_size=settings.chunk_size,
             chunk_overlap=settings.chunk_overlap
         )
-        chunks = chunker.chunk_text(extracted_data['text'], extracted_data.get('metadata', {}))
+        chunks = chunker.chunk(
+            text=extracted_data['text'],
+            doc_id=temp_doc_id,
+            metadata=extracted_data.get('metadata', {})
+        )
         
         # Generate embeddings
-        embeddings = embedder.embed_chunks([c.text for c in chunks])
+        embeddings = embedder.embed_chunks([c.chunk_text for c in chunks])
         
         # Add to FAISS index
         faiss_ids = index_manager.add_vectors(embeddings)
@@ -153,11 +161,11 @@ def process_document(uploaded_file, components):
                 db_chunk = Chunk(
                     document_id=doc.id,
                     chunk_index=i,
-                    chunk_text=chunk.text,
+                    chunk_text=chunk.chunk_text,
                     start_char=chunk.start_char,
                     end_char=chunk.end_char,
                     faiss_id=faiss_id,
-                    metadata=chunk.metadata
+                    chunk_metadata=chunk.metadata
                 )
                 session.add(db_chunk)
             
