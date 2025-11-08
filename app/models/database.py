@@ -118,9 +118,17 @@ class DatabaseManager:
         logger.info(f"Database initialized: {self.database_url}")
     
     def create_tables(self):
-        """Create all database tables."""
-        Base.metadata.create_all(bind=self.engine)
-        logger.info("Database tables created")
+        """Create all database tables if they don't exist."""
+        from sqlalchemy import inspect
+        inspector = inspect(self.engine)
+        existing_tables = inspector.get_table_names()
+        
+        # Only create tables if they don't exist
+        if not existing_tables:
+            Base.metadata.create_all(bind=self.engine, checkfirst=True)
+            logger.info("Database tables created")
+        else:
+            logger.info(f"Database tables already exist: {existing_tables}")
     
     def drop_tables(self):
         """Drop all database tables."""
