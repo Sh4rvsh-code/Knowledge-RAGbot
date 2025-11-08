@@ -144,6 +144,7 @@ def process_document(uploaded_file, components):
         faiss_ids = index_manager.add_vectors(embeddings)
         
         # Save to database
+        import json
         with db_manager.get_session() as session:
             doc = Document(
                 filename=uploaded_file.name,
@@ -151,7 +152,7 @@ def process_document(uploaded_file, components):
                 file_size=uploaded_file.size,
                 status='completed',
                 total_chunks=len(chunks),
-                metadata=extracted_data.get('metadata', {})
+                doc_metadata=json.dumps(extracted_data.get('metadata', {}))
             )
             session.add(doc)
             session.flush()
@@ -159,13 +160,13 @@ def process_document(uploaded_file, components):
             # Add chunks
             for i, (chunk, faiss_id) in enumerate(zip(chunks, faiss_ids)):
                 db_chunk = Chunk(
-                    document_id=doc.id,
+                    doc_id=doc.id,
                     chunk_index=i,
                     chunk_text=chunk.chunk_text,
                     start_char=chunk.start_char,
                     end_char=chunk.end_char,
                     faiss_id=faiss_id,
-                    chunk_metadata=chunk.metadata
+                    chunk_metadata=json.dumps(chunk.metadata)
                 )
                 session.add(db_chunk)
             
