@@ -173,7 +173,7 @@ class DocumentService:
                 start_char=chunk.start_char,
                 end_char=chunk.end_char,
                 faiss_id=faiss_id,
-                metadata=chunk.metadata
+                chunk_metadata=chunk.metadata
             )
             db.add(db_chunk)
         
@@ -181,7 +181,7 @@ class DocumentService:
         document = db.query(Document).filter(Document.id == doc_id).first()
         if document:
             document.total_chunks = len(chunks)
-            document.metadata = metadata
+            document.doc_metadata = metadata
         
         db.commit()
         

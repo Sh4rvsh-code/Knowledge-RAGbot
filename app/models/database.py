@@ -30,7 +30,7 @@ class Document(Base):
     status: Mapped[str] = mapped_column(String, default="processing", nullable=False)
     total_chunks: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    doc_metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Relationships
     chunks: Mapped[list["Chunk"]] = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
@@ -52,7 +52,7 @@ class Chunk(Base):
     end_char: Mapped[int] = mapped_column(Integer, nullable=False)
     faiss_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     embedding_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    chunk_metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relationships

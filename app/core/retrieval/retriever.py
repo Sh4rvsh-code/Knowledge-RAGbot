@@ -126,12 +126,12 @@ class SemanticRetriever:
                     "score": score,
                     "start_char": chunk.start_char,
                     "end_char": chunk.end_char,
-                    "metadata": chunk.metadata or {}
+                    "metadata": chunk.chunk_metadata or {}
                 }
                 
                 # Add page number if available (for PDFs)
-                if chunk.metadata and "page_number" in chunk.metadata:
-                    result["page"] = chunk.metadata["page_number"]
+                if chunk.chunk_metadata and "page_number" in chunk.chunk_metadata:
+                    result["page"] = chunk.chunk_metadata["page_number"]
                 
                 results.append(result)
                 
@@ -201,7 +201,7 @@ class SemanticRetriever:
                     "score": score,
                     "start_char": chunk.start_char,
                     "end_char": chunk.end_char,
-                    "metadata": chunk.metadata or {}
+                    "metadata": chunk.chunk_metadata or {}
                 }
                 
                 results.append(result)
