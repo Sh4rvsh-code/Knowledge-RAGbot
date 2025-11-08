@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy import create_engine, String, DateTime, ForeignKey, Text, Float, Integer
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker, Session, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
+import json
 
 from app.config import settings
 from app.utils.logger import app_logger as logger
@@ -11,7 +12,9 @@ from app.utils.logger import app_logger as logger
 
 class Base(DeclarativeBase):
     """Base class for all database models."""
-    pass
+    type_annotation_map = {
+        Dict[str, Any]: Text
+    }
 
 
 class Document(Base):
@@ -27,7 +30,7 @@ class Document(Base):
     status: Mapped[str] = mapped_column(String, default="processing", nullable=False)
     total_chunks: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(type_=Text, nullable=True)
+    metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     # Relationships
     chunks: Mapped[list["Chunk"]] = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
@@ -49,7 +52,7 @@ class Chunk(Base):
     end_char: Mapped[int] = mapped_column(Integer, nullable=False)
     faiss_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     embedding_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(type_=Text, nullable=True)
+    metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relationships
@@ -69,7 +72,7 @@ class Query(Base):
     response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     processing_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    retrieved_chunks: Mapped[Optional[Dict[str, Any]]] = mapped_column(type_=Text, nullable=True)
+    retrieved_chunks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     top_k: Mapped[int] = mapped_column(Integer, default=5)
     llm_provider: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
