@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     
     # Retrieval Configuration
     top_k_results: int = Field(default=5, alias="TOP_K_RESULTS")
-    similarity_threshold: float = Field(default=0.7, alias="SIMILARITY_THRESHOLD")
+    similarity_threshold: float = Field(default=0.3, alias="SIMILARITY_THRESHOLD")
     
     # File Storage
     upload_dir: str = Field(default="data/uploads", alias="UPLOAD_DIR")

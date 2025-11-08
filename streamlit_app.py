@@ -218,10 +218,30 @@ def answer_question(query, top_k, min_score, components):
     try:
         retriever = components['retriever']
         orchestrator = components['orchestrator']
+        index_manager = components['index_manager']
+        
+        # Check if index has vectors
+        if not index_manager.index or index_manager.index.ntotal == 0:
+            return {
+                'success': False,
+                'error': 'No documents in the index. Please upload documents first.',
+                'sources': [],
+                'retrieved_count': 0
+            }
         
         # Retrieve relevant chunks
         start_time = datetime.now()
         results = retriever.search(query, top_k=top_k, min_score=min_score)
+        
+        # If no results found, provide helpful message
+        if len(results) == 0:
+            return {
+                'success': False,
+                'error': f'No relevant chunks found with similarity >= {min_score:.2f}. Try lowering the threshold.',
+                'sources': [],
+                'retrieved_count': 0,
+                'processing_time': (datetime.now() - start_time).total_seconds()
+            }
         
         # Generate answer
         context_text = retriever.get_context_window(results)
@@ -330,7 +350,8 @@ def main():
                 st.success("✅ API key set!")
         
         top_k = st.slider("Number of sources", min_value=1, max_value=10, value=5)
-        min_score = st.slider("Minimum similarity", min_value=0.0, max_value=1.0, value=0.7, step=0.05)
+        min_score = st.slider("Minimum similarity", min_value=0.0, max_value=1.0, value=0.3, step=0.05, 
+                             help="Lower threshold = more results. Try 0.3 for better retrieval.")
         
         st.divider()
         
@@ -338,9 +359,23 @@ def main():
         docs = get_documents(components)
         total_chunks = sum(d['total_chunks'] for d in docs)
         
-        st.metric("Documents", len(docs))
-        st.metric("Chunks", total_chunks)
-        st.metric("Queries", len(st.session_state.query_history))
+        # Get FAISS stats
+        index_manager = components['index_manager']
+        faiss_count = index_manager.index.ntotal if index_manager.index else 0
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Documents", len(docs))
+            st.metric("Chunks in DB", total_chunks)
+        with col2:
+            st.metric("Vectors in FAISS", faiss_count)
+            st.metric("Queries", len(st.session_state.query_history))
+        
+        # Warning if mismatch
+        if total_chunks > 0 and faiss_count == 0:
+            st.warning("⚠️ Chunks in DB but no vectors in FAISS! Try re-uploading documents.")
+        elif total_chunks != faiss_count:
+            st.info(f"ℹ️ DB chunks ({total_chunks}) ≠ FAISS vectors ({faiss_count})")
         
         st.divider()
         
@@ -405,6 +440,11 @@ def main():
                                     f"Chunk #{source['chunk_index']} | "
                                     f"Chars: {source['start_char']}-{source['end_char']}"
                                 )
+                else:
+                    # Display error message
+                    st.error(f"❌ Error: {result.get('error', 'Unknown error')}")
+                    if result.get('retrieved_count', 0) == 0:
+                        st.info(f"💡 Tip: Try lowering the similarity threshold below {min_score:.2f} using the slider in the sidebar.")
     
     # Tab 2: Upload Documents
     with tab2:
