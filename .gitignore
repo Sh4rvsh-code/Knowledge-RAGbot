@@ -58,6 +58,6 @@ logs/
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Models cache
-models/
+# Models cache (but not app/models source code!)
+/models/
 .cache/
