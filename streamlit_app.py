@@ -274,11 +274,11 @@ def delete_document(doc_id, components):
             # Get chunks to remove from index
             doc = session.query(Document).filter(Document.id == doc_id).first()
             if doc:
-                chunks = session.query(Chunk).filter(Chunk.document_id == doc_id).all()
+                chunks = session.query(Chunk).filter(Chunk.doc_id == doc_id).all()
                 faiss_ids = [c.faiss_id for c in chunks]
                 
-                # Delete from database
-                session.query(Chunk).filter(Chunk.document_id == doc_id).delete()
+                # Delete from database (use doc_id, not document_id)
+                session.query(Chunk).filter(Chunk.doc_id == doc_id).delete()
                 session.query(Document).filter(Document.id == doc_id).delete()
                 session.commit()
                 
