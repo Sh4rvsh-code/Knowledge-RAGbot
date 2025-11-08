@@ -70,8 +70,11 @@ def initialize_system():
         # Initialize index manager (384 dimensions for all-MiniLM-L6-v2)
         index_manager = get_index_manager(dimension=384)
         
-        # Initialize retriever
-        retriever = SemanticRetriever(embedder, index_manager, db_manager)
+        # Initialize retriever (it will use global embedder, index_manager, db_manager)
+        retriever = SemanticRetriever(
+            top_k=settings.top_k_results,
+            similarity_threshold=settings.similarity_threshold
+        )
         
         # Initialize LLM
         llm = get_llm()
