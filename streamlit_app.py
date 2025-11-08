@@ -139,12 +139,15 @@ def process_document(uploaded_file, components):
         
         # Generate embeddings
         embeddings = embedder.embed_chunks([c.chunk_text for c in chunks])
+        st.info(f"✅ Generated {len(embeddings)} embeddings")
         
         # Add to FAISS index
         faiss_ids = index_manager.add_vectors(embeddings)
+        st.info(f"✅ Added {len(faiss_ids)} vectors to FAISS index")
         
         # Save to database
         import json
+        st.info("💾 Saving to database...")
         with db_manager.get_session() as session:
             doc = Document(
                 filename=uploaded_file.name,
@@ -171,9 +174,11 @@ def process_document(uploaded_file, components):
                 session.add(db_chunk)
             
             session.commit()
+            st.info(f"✅ Saved document and {len(chunks)} chunks to database")
         
         # Save index
         index_manager.save_index()
+        st.info("✅ FAISS index saved to disk")
         
         # Clean up temp file
         os.unlink(tmp_path)
@@ -186,8 +191,9 @@ def process_document(uploaded_file, components):
         }
     
     except Exception as e:
-        st.error(f"Error processing document: {e}")
-        st.error(traceback.format_exc())
+        st.error(f"❌ Error processing document: {e}")
+        st.error(f"**Traceback:**")
+        st.code(traceback.format_exc())
         return {'success': False, 'error': str(e)}
 
 def answer_question(query, top_k, min_score, components):
