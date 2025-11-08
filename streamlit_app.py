@@ -48,11 +48,22 @@ if 'initialized' not in st.session_state:
     st.session_state.orchestrator = None
     st.session_state.query_history = []
 
-@st.cache_resource
 def initialize_system():
     """Initialize the RAG system components."""
     try:
-        # Load settings
+        # Load settings (use st.secrets if available, otherwise env vars)
+        if hasattr(st, 'secrets') and len(st.secrets) > 0:
+            # Override settings with Streamlit secrets
+            os.environ['LLM_PROVIDER'] = st.secrets.get('LLM_PROVIDER', 'gemini')
+            os.environ['GEMINI_API_KEY'] = st.secrets.get('GEMINI_API_KEY', '')
+            os.environ['GEMINI_MODEL'] = st.secrets.get('GEMINI_MODEL', 'gemini-pro')
+            os.environ['DATABASE_URL'] = st.secrets.get('DATABASE_URL', 'sqlite:///./data/rag.db')
+            os.environ['EMBEDDING_MODEL'] = st.secrets.get('EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
+            os.environ['CHUNK_SIZE'] = str(st.secrets.get('CHUNK_SIZE', '512'))
+            os.environ['CHUNK_OVERLAP'] = str(st.secrets.get('CHUNK_OVERLAP', '50'))
+            os.environ['TOP_K_RESULTS'] = str(st.secrets.get('TOP_K_RESULTS', '5'))
+            os.environ['SIMILARITY_THRESHOLD'] = str(st.secrets.get('SIMILARITY_THRESHOLD', '0.7'))
+        
         settings = Settings()
         
         # Create necessary directories
