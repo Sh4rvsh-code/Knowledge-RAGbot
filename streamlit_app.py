@@ -163,6 +163,7 @@ def process_document(uploaded_file, components):
         st.info("💾 Saving to database...")
         with db_manager.get_session() as session:
             doc = Document(
+                id=temp_doc_id,  # Use the UUID we generated earlier
                 filename=uploaded_file.name,
                 file_type=Path(uploaded_file.name).suffix[1:],
                 file_size=uploaded_file.size,
