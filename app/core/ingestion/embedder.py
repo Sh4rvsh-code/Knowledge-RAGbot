@@ -37,7 +37,22 @@ class Embedder:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         
         logger.info(f"Loading embedding model: {self.model_name}")
-        self.model = SentenceTransformer(self.model_name)
+        
+        # Fix for PyTorch 2.0+ meta tensor issue with Python 3.13
+        try:
+            # Try loading with device='cpu' explicitly
+            self.model = SentenceTransformer(self.model_name, device='cpu')
+        except Exception as e:
+            logger.warning(f"Failed to load with device='cpu': {e}")
+            # Fallback: try loading without device specification
+            try:
+                import torch
+                torch.set_default_device('cpu')
+                self.model = SentenceTransformer(self.model_name)
+            except Exception as e2:
+                logger.error(f"Failed to load model: {e2}")
+                raise
+        
         self.embedding_dimension = self.model.get_sentence_embedding_dimension()
         
         logger.info(
