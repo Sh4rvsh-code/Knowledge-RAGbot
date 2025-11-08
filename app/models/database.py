@@ -1,7 +1,7 @@
 """Database models using SQLAlchemy."""
 from datetime import datetime
-from typing import Optional
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, Float, JSON
+from typing import Optional, Dict, Any
+from sqlalchemy import create_engine, String, DateTime, ForeignKey, Text, Float, Integer
 from sqlalchemy.orm import DeclarativeBase, relationship, sessionmaker, Session, Mapped, mapped_column
 from sqlalchemy.pool import StaticPool
 
@@ -19,18 +19,18 @@ class Document(Base):
     
     __tablename__ = "documents"
     
-    id = Column(String, primary_key=True, index=True)
-    filename = Column(String, nullable=False)
-    file_type = Column(String, nullable=False)
-    file_size = Column(Integer, nullable=False)
-    upload_date = Column(DateTime, default=datetime.utcnow, nullable=False)
-    status = Column(String, default="processing", nullable=False)  # processing, completed, failed
-    total_chunks = Column(Integer, default=0)
-    error_message = Column(Text, nullable=True)
-    metadata = Column(JSON, nullable=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+    filename: Mapped[str] = mapped_column(String, nullable=False)
+    file_type: Mapped[str] = mapped_column(String, nullable=False)
+    file_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    upload_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="processing", nullable=False)
+    total_chunks: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(type_=Text, nullable=True)
     
     # Relationships
-    chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
+    chunks: Mapped[list["Chunk"]] = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Document(id={self.id}, filename={self.filename}, status={self.status})>"
@@ -41,19 +41,19 @@ class Chunk(Base):
     
     __tablename__ = "chunks"
     
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    doc_id = Column(String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
-    chunk_index = Column(Integer, nullable=False)
-    chunk_text = Column(Text, nullable=False)
-    start_char = Column(Integer, nullable=False)
-    end_char = Column(Integer, nullable=False)
-    faiss_id = Column(Integer, nullable=True, index=True)
-    embedding_id = Column(String, nullable=True)
-    metadata = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    doc_id: Mapped[str] = mapped_column(String, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    chunk_text: Mapped[str] = mapped_column(Text, nullable=False)
+    start_char: Mapped[int] = mapped_column(Integer, nullable=False)
+    end_char: Mapped[int] = mapped_column(Integer, nullable=False)
+    faiss_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    embedding_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column(type_=Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     
     # Relationships
-    document = relationship("Document", back_populates="chunks")
+    document: Mapped["Document"] = relationship("Document", back_populates="chunks")
     
     def __repr__(self):
         return f"<Chunk(id={self.id}, doc_id={self.doc_id}, chunk_index={self.chunk_index})>"
@@ -64,15 +64,15 @@ class Query(Base):
     
     __tablename__ = "queries"
     
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    query_text = Column(Text, nullable=False)
-    response = Column(Text, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-    processing_time = Column(Float, nullable=True)
-    retrieved_chunks = Column(JSON, nullable=True)  # Store chunk IDs and scores
-    top_k = Column(Integer, default=5)
-    llm_provider = Column(String, nullable=True)
-    error_message = Column(Text, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
+    query_text: Mapped[str] = mapped_column(Text, nullable=False)
+    response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    processing_time: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    retrieved_chunks: Mapped[Optional[Dict[str, Any]]] = mapped_column(type_=Text, nullable=True)
+    top_k: Mapped[int] = mapped_column(Integer, default=5)
+    llm_provider: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     def __repr__(self):
         return f"<Query(id={self.id}, query_text={self.query_text[:50]}...)>"
