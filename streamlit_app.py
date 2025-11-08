@@ -120,7 +120,7 @@ def process_document(uploaded_file, components):
         # Extract text using ExtractorFactory instance
         extractor_factory = ExtractorFactory()
         extractor = extractor_factory.get_extractor(tmp_path)
-        extracted_data = extractor.extract(tmp_path)
+        extraction_result = extractor.extract(tmp_path)
         
         # Generate a temporary doc_id (will be replaced with actual DB id)
         import uuid
@@ -132,9 +132,9 @@ def process_document(uploaded_file, components):
             chunk_overlap=settings.chunk_overlap
         )
         chunks = chunker.chunk(
-            text=extracted_data['text'],
+            text=extraction_result.text,
             doc_id=temp_doc_id,
-            metadata=extracted_data.get('metadata', {})
+            metadata=extraction_result.metadata
         )
         
         # Generate embeddings
@@ -152,7 +152,7 @@ def process_document(uploaded_file, components):
                 file_size=uploaded_file.size,
                 status='completed',
                 total_chunks=len(chunks),
-                doc_metadata=json.dumps(extracted_data.get('metadata', {}))
+                doc_metadata=json.dumps(extraction_result.metadata)
             )
             session.add(doc)
             session.flush()
