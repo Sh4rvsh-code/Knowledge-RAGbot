@@ -70,11 +70,13 @@ class Settings(BaseSettings):
     similarity_threshold: float = Field(default=0.3, alias="SIMILARITY_THRESHOLD")
     
     # File Storage
+    data_dir: str = Field(default="data", alias="DATA_DIR")
     upload_dir: str = Field(default="data/uploads", alias="UPLOAD_DIR")
     max_upload_size_mb: int = Field(default=50, alias="MAX_UPLOAD_SIZE_MB")
     data_dir: str = Field(default="data", alias="DATA_DIR")
     
     # FAISS Index
+    index_dir: str = Field(default="data/faiss_index", alias="INDEX_DIR")
     faiss_index_dir: str = Field(default="data/faiss_index", alias="FAISS_INDEX_DIR")
     faiss_index_type: str = Field(default="IndexFlatIP", alias="FAISS_INDEX_TYPE")
     index_dir: str = Field(default="data/faiss_index", alias="INDEX_DIR")  # Alias for faiss_index_dir
