@@ -62,7 +62,7 @@ def initialize_system():
                 os.environ['LLM_PROVIDER'] = st.secrets.get('LLM_PROVIDER', 'gemini')
                 os.environ['GEMINI_API_KEY'] = st.secrets.get('GEMINI_API_KEY', '')
                 os.environ['HUGGINGFACE_API_KEY'] = st.secrets.get('HUGGINGFACE_API_KEY', '')
-                os.environ['GEMINI_MODEL'] = st.secrets.get('GEMINI_MODEL', 'gemini-2.0-flash-exp')
+                os.environ['GEMINI_MODEL'] = st.secrets.get('GEMINI_MODEL', 'gemini-1.5-flash-latest')
                 os.environ['DATABASE_URL'] = st.secrets.get('DATABASE_URL', 'sqlite:///./data/rag.db')
                 os.environ['EMBEDDING_MODEL'] = st.secrets.get('EMBEDDING_MODEL', 'sentence-transformers/all-MiniLM-L6-v2')
                 os.environ['CHUNK_SIZE'] = str(st.secrets.get('CHUNK_SIZE', '512'))
