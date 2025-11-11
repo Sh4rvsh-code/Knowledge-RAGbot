@@ -1,0 +1,23 @@
+This is a sample document about Python programming.
+
+Python is a high-level, interpreted programming language created by Guido van Rossum in 1991.
+
+Key features of Python include:
+- Easy to learn syntax
+- Dynamic typing
+- Automatic memory management
+- Extensive standard library
+- Support for multiple programming paradigms
+
+Python is widely used for:
+1. Web development (Django, Flask)
+2. Data science and machine learning (pandas, scikit-learn, TensorFlow)
+3. Automation and scripting
+4. Scientific computing
+
+The philosophy of Python emphasizes code readability and simplicity, as expressed in "The Zen of Python":
+- Beautiful is better than ugly
+- Explicit is better than implicit
+- Simple is better than complex
+
+Python 3 is the current version and is actively maintained. Python 2 reached end-of-life in 2020.

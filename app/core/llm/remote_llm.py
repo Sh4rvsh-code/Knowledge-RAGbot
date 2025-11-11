@@ -170,7 +170,7 @@ def get_remote_llm(provider: str = "openai") -> BaseLLM:
 
 def get_llm() -> BaseLLM:
     """
-    Get LLM instance based on configuration.
+    Get LLM instance based on configuration with automatic fallback.
     
     Returns:
         LLM instance (free, local, or remote)
@@ -180,7 +180,22 @@ def get_llm() -> BaseLLM:
     # Google Gemini (FREE with generous limits!)
     if provider == "gemini":
         from app.core.llm.gemini_llm import GeminiLLM
-        return GeminiLLM()
+        try:
+            return GeminiLLM()
+        except ValueError as e:
+            logger.warning(f"Gemini initialization failed: {e}. Falling back to free LLM.")
+            from app.core.llm.free_llm import get_free_llm
+            return get_free_llm()
+    
+    # Google Gemma (via HuggingFace - FREE with API key!)
+    elif provider == "gemma":
+        from app.core.llm.gemma_llm import GemmaLLM
+        try:
+            return GemmaLLM()
+        except ValueError as e:
+            logger.warning(f"Gemma initialization failed: {e}. Falling back to free LLM.")
+            from app.core.llm.free_llm import get_free_llm
+            return get_free_llm()
     
     # FREE options (no API key needed or free tier)
     elif provider == "free":
@@ -197,16 +212,30 @@ def get_llm() -> BaseLLM:
     
     # PAID options (require API keys)
     elif provider == "openai":
-        return get_remote_llm("openai")
+        try:
+            return get_remote_llm("openai")
+        except ValueError as e:
+            logger.warning(f"OpenAI initialization failed: {e}. Falling back to free LLM.")
+            from app.core.llm.free_llm import get_free_llm
+            return get_free_llm()
     
     elif provider == "anthropic":
-        return get_remote_llm("anthropic")
+        try:
+            return get_remote_llm("anthropic")
+        except ValueError as e:
+            logger.warning(f"Anthropic initialization failed: {e}. Falling back to free LLM.")
+            from app.core.llm.free_llm import get_free_llm
+            return get_free_llm()
     
     else:
         # Default to Gemini if API key available
         if settings.gemini_api_key:
             from app.core.llm.gemini_llm import GeminiLLM
-            return GeminiLLM()
+            try:
+                return GeminiLLM()
+            except ValueError:
+                pass
         # Otherwise use free option
+        logger.info("No API key configured. Using free LLM.")
         from app.core.llm.free_llm import get_free_llm
         return get_free_llm()

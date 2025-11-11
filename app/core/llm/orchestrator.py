@@ -101,7 +101,7 @@ class LLMOrchestrator:
     
     def _build_prompt(self, query: str, context: str) -> str:
         """
-        Build prompt for LLM.
+        Build prompt for LLM with optimized formatting.
         
         Args:
             query: User question
@@ -110,21 +110,17 @@ class LLMOrchestrator:
         Returns:
             Formatted prompt
         """
-        prompt = f"""You are a helpful AI assistant that answers questions based on the provided context.
+        # Enhanced prompt - clearer separation to avoid LLM echoing instructions
+        prompt = f"""You are a helpful assistant. Answer the question based on the context provided below.
 
-Context:
+Context Information:
 {context}
 
-Question: {query}
+User Question: {query}
 
-Instructions:
-- Answer the question using ONLY the information from the provided context
-- If the context doesn't contain enough information to answer the question, say so
-- Be concise and accurate
-- Cite sources by referring to [Source X] when appropriate
-- Do not make up information not present in the context
+Provide a clear, detailed answer based only on the context above. If the context doesn't contain enough information, say so politely.
 
-Answer:"""
+Your Answer:"""
         
         return prompt
     

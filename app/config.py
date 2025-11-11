@@ -27,8 +27,8 @@ class Settings(BaseSettings):
     api_reload: bool = Field(default=False, alias="API_RELOAD")
     
     # LLM Configuration
-    llm_provider: Literal["gemini", "openai", "anthropic", "huggingface", "local", "free"] = Field(
-        default="gemini", 
+    llm_provider: Literal["gemini", "gemma", "openai", "anthropic", "huggingface", "local", "free"] = Field(
+        default="free",  # Changed from gemini to free as default
         alias="LLM_PROVIDER"
     )
     
@@ -44,11 +44,14 @@ class Settings(BaseSettings):
     
     # Google Gemini Configuration (FREE with generous limits!)
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
-    gemini_model: str = Field(default="gemini-1.5-flash", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_MODEL")
     
     # Hugging Face Configuration (FREE!)
     huggingface_api_key: str = Field(default="", alias="HUGGINGFACE_API_KEY")
     huggingface_model: str = Field(default="google/flan-t5-xxl", alias="HUGGINGFACE_MODEL")
+    
+    # Google Gemma Configuration (via HuggingFace - FREE!)
+    gemma_model: str = Field(default="google/gemma-2-2b-it:nebius", alias="GEMMA_MODEL")
     
     # Local LLM Configuration
     local_model_name: str = Field(default="google/flan-t5-small", alias="LOCAL_MODEL_NAME")
@@ -59,15 +62,15 @@ class Settings(BaseSettings):
         default="sentence-transformers/all-MiniLM-L6-v2",
         alias="EMBEDDING_MODEL"
     )
-    embedding_batch_size: int = Field(default=32, alias="EMBEDDING_BATCH_SIZE")
+    embedding_batch_size: int = Field(default=128, alias="EMBEDDING_BATCH_SIZE")  # Increased from 32 for speed
     
-    # Chunking Configuration
-    chunk_size: int = Field(default=1000, alias="CHUNK_SIZE")
-    chunk_overlap: int = Field(default=200, alias="CHUNK_OVERLAP")
+    # Chunking Configuration (OPTIMIZED)
+    chunk_size: int = Field(default=500, alias="CHUNK_SIZE")  # Reduced from 1000
+    chunk_overlap: int = Field(default=100, alias="CHUNK_OVERLAP")  # Reduced from 200
     
-    # Retrieval Configuration
+    # Retrieval Configuration (OPTIMIZED)
     top_k_results: int = Field(default=5, alias="TOP_K_RESULTS")
-    similarity_threshold: float = Field(default=0.3, alias="SIMILARITY_THRESHOLD")
+    similarity_threshold: float = Field(default=0.15, alias="SIMILARITY_THRESHOLD")  # Lowered from 0.3
     
     # File Storage
     data_dir: str = Field(default="data", alias="DATA_DIR")

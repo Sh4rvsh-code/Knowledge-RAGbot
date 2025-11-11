@@ -39,8 +39,9 @@ class HuggingFaceLLM(BaseLLM):
         self.default_temperature = temperature
         self.default_max_tokens = max_tokens
         
-        self.api_url = f"https://api-inference.huggingface.co/models/{self.model}"
-        self.headers = {}
+        # Updated to new HF endpoint
+        self.api_url = f"https://router.huggingface.co/hf-inference/models/{self.model}"
+        self.headers = {"Content-Type": "application/json"}
         if self.api_key:
             self.headers["Authorization"] = f"Bearer {self.api_key}"
         
@@ -168,7 +169,7 @@ class LocalLLM(BaseLLM):
         temperature: float = None
     ) -> str:
         """
-        Generate response using local model.
+        Generate response using local model with improved quality.
         
         Args:
             prompt: Input prompt
@@ -179,23 +180,44 @@ class LocalLLM(BaseLLM):
             Generated text
         """
         max_tokens = max_tokens or self.default_max_tokens
+        temperature = temperature if temperature is not None else 0.7
         
         try:
+            # Generate with improved parameters for better quality
+            logger.info(f"Generating with max_tokens={max_tokens}, temperature={temperature}")
+            
             result = self.pipeline(
                 prompt,
-                max_length=max_tokens,
-                do_sample=True,
-                temperature=temperature or 0.7
+                max_new_tokens=max_tokens,
+                do_sample=True,  # Always use sampling for better variety
+                temperature=max(temperature, 0.7),  # Higher temp for more detailed responses
+                top_p=0.95,  # Increased for more diverse tokens
+                top_k=50,  # Add top-k sampling
+                num_return_sequences=1,
+                repetition_penalty=1.2  # Reduce repetition
             )
             
             if result and len(result) > 0:
-                return result[0]["generated_text"]
+                generated_text = result[0]["generated_text"]
+                logger.info(f"Generated text length: {len(generated_text)} chars")
+                logger.debug(f"Generated text: {generated_text[:200]}...")
+                
+                # Clean up the response
+                cleaned = generated_text.strip()
+                
+                # If response is empty or too short, provide fallback
+                if len(cleaned) < 10:
+                    logger.warning("Generated text is too short or empty")
+                    return "Based on the documents, I don't have enough information to provide a detailed answer to this specific question."
+                
+                return cleaned
             else:
-                return "Error: No response generated"
+                logger.warning("Pipeline returned no results")
+                return "I don't have enough information to answer that question based on the provided documents."
                 
         except Exception as e:
             logger.error(f"Error generating with local model: {str(e)}")
-            return f"Error: {str(e)}"
+            return f"I encountered an error while generating the answer. Please try again."
 
 
 def get_free_llm() -> BaseLLM:
@@ -203,27 +225,33 @@ def get_free_llm() -> BaseLLM:
     Get a FREE LLM instance.
     
     Priority:
-    1. Hugging Face API (free with optional API key)
-    2. Local model (completely free, no API needed)
+    1. Local model (completely free, no API needed) 
+    2. Hugging Face API (requires free API key)
     
     Returns:
         Free LLM instance
     """
-    # Try Hugging Face first (better quality, free API)
+    # Try local model first (no API key needed)
     try:
-        return HuggingFaceLLM()
-    except Exception as e:
-        logger.warning(f"Could not initialize Hugging Face LLM: {e}")
-    
-    # Fall back to local model
-    try:
-        logger.info("Falling back to local model (may be slower)")
+        logger.info("Initializing local model (completely free, no API needed)")
         return LocalLLM()
     except Exception as e:
-        logger.error(f"Could not initialize local LLM: {e}")
-        raise ValueError(
-            "No LLM available. Please either:\n"
-            "1. Get a free Hugging Face token from huggingface.co\n"
-            "2. Install transformers: pip install transformers torch\n"
-            "3. Use OpenAI/Anthropic API key"
-        )
+        logger.warning(f"Could not initialize local LLM: {e}")
+    
+    # Fall back to Hugging Face if HF API key is available
+    from app.config import settings
+    if settings.huggingface_api_key:
+        try:
+            logger.info("Falling back to Hugging Face API")
+            return HuggingFaceLLM()
+        except Exception as e:
+            logger.warning(f"Could not initialize Hugging Face LLM: {e}")
+    
+    # If all else fails, provide helpful error
+    raise ValueError(
+        "No LLM available. Please either:\n"
+        "1. Install transformers for local model: pip install transformers torch\n"
+        "2. Get a free Gemini API key from https://makersuite.google.com/app/apikey\n"
+        "3. Get a free Hugging Face token from https://huggingface.co/settings/tokens\n"
+        "4. Use OpenAI/Anthropic API key"
+    )

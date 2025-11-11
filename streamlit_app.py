@@ -10,6 +10,9 @@ import tempfile
 from datetime import datetime
 import traceback
 
+# Import logger for debugging
+from app.utils.logger import app_logger as logger
+
 # Add app directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -24,6 +27,7 @@ try:
     from app.core.llm.orchestrator import LLMOrchestrator
     from app.core.llm.remote_llm import get_llm
     from app.models.database import DatabaseManager, Document, Chunk
+    from app.services.improved_qa_service import ImprovedRAGPipeline
     from sqlalchemy.orm import Session
 except ImportError as e:
     st.error(f"Failed to import required modules: {e}")
@@ -84,6 +88,18 @@ def initialize_system():
         
         # Initialize index manager (384 dimensions for all-MiniLM-L6-v2)
         index_manager = get_index_manager(dimension=384)
+        
+        # Check index/database sync
+        with db_manager.get_session() as session:
+            total_chunks = session.query(Chunk).count()
+        
+        faiss_vectors = index_manager.index.ntotal if index_manager.index else 0
+        
+        # Warn if out of sync
+        if total_chunks > 0 and faiss_vectors == 0:
+            st.warning(f"⚠️ Database has {total_chunks} chunks but FAISS index is empty. Upload may be needed.")
+        elif total_chunks != faiss_vectors:
+            st.info(f"ℹ️ Index sync: DB chunks={total_chunks}, FAISS vectors={faiss_vectors}")
         
         # Initialize retriever (it will use global embedder, index_manager, db_manager)
         retriever = SemanticRetriever(
@@ -217,11 +233,9 @@ def process_document(uploaded_file, components):
         st.code(traceback.format_exc())
         return {'success': False, 'error': str(e)}
 
-def answer_question(query, top_k, min_score, components):
-    """Answer a question using RAG."""
+def answer_question(query, top_k, min_score, components, use_cache=True, use_reranker=True):
+    """Answer a question using RAG with optional reranking."""
     try:
-        retriever = components['retriever']
-        orchestrator = components['orchestrator']
         index_manager = components['index_manager']
         
         # Check if index has vectors
@@ -233,31 +247,79 @@ def answer_question(query, top_k, min_score, components):
                 'retrieved_count': 0
             }
         
-        # Retrieve relevant chunks
-        start_time = datetime.now()
-        results = retriever.search(query, top_k=top_k, min_score=min_score)
+        # Check cache first (if enabled)
+        from app.core.cache import get_cache
+        cache = get_cache()
+        provider = st.session_state.get('llm_provider', 'free')
         
-        # If no results found, provide helpful message
-        if len(results) == 0:
+        if use_cache:
+            cached_response = cache.get(query, provider)
+            if cached_response:
+                # Return cached response instantly
+                logger.info(f"Returning CACHED answer for: {query[:50]}")
+                return {
+                    'success': True,
+                    'answer': cached_response['answer'],
+                    'sources': cached_response['sources'],
+                    'processing_time': 0.001,  # Cache hit
+                    'retrieved_count': len(cached_response['sources']),
+                    'cached': True
+                }
+        else:
+            logger.info(f"Cache DISABLED - forcing fresh retrieval for: {query[:50]}")
+        
+        # Use ImprovedRAGPipeline for better results
+        start_time = datetime.now()
+        
+        # Initialize pipeline with reranker option
+        top_k_retrieval = 50 if use_reranker else top_k  # Get more candidates for reranking
+        pipeline = ImprovedRAGPipeline(
+            use_reranker=use_reranker,
+            top_k_retrieval=top_k_retrieval,
+            top_k_final=top_k,
+            similarity_threshold=min_score
+        )
+        
+        # Get answer using improved pipeline
+        result = pipeline.answer_question(
+            question=query,
+            temperature=0.0,  # Grounded answers
+            max_tokens=512,
+            log_prompt=False
+        )
+        
+        processing_time = (datetime.now() - start_time).total_seconds()
+        
+        # If no results found
+        if not result['sources']:
             return {
                 'success': False,
                 'error': f'No relevant chunks found with similarity >= {min_score:.2f}. Try lowering the threshold.',
                 'sources': [],
                 'retrieved_count': 0,
-                'processing_time': (datetime.now() - start_time).total_seconds()
+                'processing_time': processing_time
             }
         
-        # Generate answer (pass results directly, orchestrator will build context)
-        answer = orchestrator.answer_question(query, results)
+        answer = result['answer']
+        sources = result['sources']
         
-        processing_time = (datetime.now() - start_time).total_seconds()
+        # Cache the response (if caching enabled)
+        if use_cache:
+            cache.set(query, answer, sources, provider)
+            logger.info(f"Answer CACHED for future queries")
+        
+        # Ensure we have a valid answer
+        if not answer or len(answer.strip()) < 5:
+            answer = "I couldn't generate a detailed answer based on the retrieved documents. Please try rephrasing your question or adjusting the similarity threshold."
         
         return {
             'success': True,
-            'answer': answer,
-            'sources': results,
+            'answer': answer.strip(),
+            'sources': sources,
             'processing_time': processing_time,
-            'retrieved_count': len(results)
+            'retrieved_count': len(sources),
+            'timings': result.get('timings', {}),
+            'verification': result.get('verification', {})
         }
     
     except Exception as e:
@@ -339,22 +401,92 @@ def main():
     with st.sidebar:
         st.header("⚙️ Settings")
         
-        # API Key input (if not set in env)
-        if not os.getenv("OPENAI_API_KEY") and not os.getenv("ANTHROPIC_API_KEY"):
-            st.warning("⚠️ No API key detected!")
-            api_provider = st.selectbox("LLM Provider", ["OpenAI", "Anthropic"])
-            api_key = st.text_input("API Key", type="password")
-            
-            if api_key:
-                if api_provider == "OpenAI":
-                    os.environ["OPENAI_API_KEY"] = api_key
-                else:
-                    os.environ["ANTHROPIC_API_KEY"] = api_key
-                st.success("✅ API key set!")
+        # LLM Provider Selection
+        st.subheader("🤖 LLM Provider")
         
+        # Initialize LLM provider in session state if not set
+        if 'llm_provider' not in st.session_state:
+            st.session_state.llm_provider = os.getenv('LLM_PROVIDER', 'free')
+        
+        # Map provider to index
+        provider_map = {
+            'free': 0,
+            'gemini': 1,
+            'gemma': 2
+        }
+        current_index = provider_map.get(st.session_state.llm_provider, 0)
+        
+        llm_provider_option = st.radio(
+            "Choose LLM:",
+            options=["Local Model (Free)", "Google Gemini API", "Google Gemma (HF)"],
+            index=current_index,
+            help="Local: Free, basic (flan-t5-small)\nGemini: Best quality (requires Gemini API key)\nGemma: Lightweight Google model (requires HuggingFace API key)"
+        )
+        
+        # Update provider based on selection
+        if llm_provider_option == "Local Model (Free)":
+            new_provider = 'free'
+        elif llm_provider_option == "Google Gemini API":
+            new_provider = 'gemini'
+        else:  # Google Gemma (HF)
+            new_provider = 'gemma'
+        
+        # Reinitialize LLM if provider changed
+        if new_provider != st.session_state.llm_provider:
+            st.session_state.llm_provider = new_provider
+            os.environ['LLM_PROVIDER'] = new_provider
+            
+            # Reinitialize LLM and orchestrator
+            try:
+                from app.core.llm.remote_llm import get_llm
+                from app.core.llm.orchestrator import LLMOrchestrator
+                
+                llm = get_llm()
+                components['orchestrator'] = LLMOrchestrator(llm)
+                st.success(f"✅ Switched to {llm_provider_option}")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to switch LLM: {e}")
+        
+        # Show current provider status
+        if st.session_state.llm_provider == 'gemini':
+            # Use settings object instead of os.getenv for reliability
+            gemini_key = components['settings'].gemini_api_key
+            if gemini_key and len(gemini_key) > 10:
+                st.success(f"✅ Gemini API key configured ({gemini_key[:20]}...)")
+                st.info(f"📱 Model: {components['settings'].gemini_model}")
+            else:
+                st.warning("⚠️ No Gemini API key found in .env file")
+                st.info("💡 Add GEMINI_API_KEY to your .env file")
+        
+        elif st.session_state.llm_provider == 'gemma':
+            hf_key = components['settings'].huggingface_api_key
+            if hf_key and len(hf_key) > 10:
+                st.success(f"✅ HuggingFace API key configured ({hf_key[:20]}...)")
+                st.info(f"📱 Model: {components['settings'].gemma_model}")
+                st.caption("💡 Gemma: Lightweight Google model, good for Q&A")
+            else:
+                st.warning("⚠️ No HuggingFace API key found")
+                st.info("💡 Get free key: https://huggingface.co/settings/tokens")
+                st.info("💡 Add to .env: HUGGINGFACE_API_KEY=your_token")
+        
+        else:  # free/local
+            st.info("ℹ️ Using local model (flan-t5-small)")
+        
+        st.divider()
+        
+        st.subheader("🔍 Retrieval Settings")
         top_k = st.slider("Number of sources", min_value=1, max_value=10, value=5)
-        min_score = st.slider("Minimum similarity", min_value=0.0, max_value=1.0, value=0.3, step=0.05, 
-                             help="Lower threshold = more results. Try 0.3 for better retrieval.")
+        min_score = st.slider("Minimum similarity", min_value=0.0, max_value=1.0, value=0.15, step=0.05, 
+                             help="⚠️ IMPORTANT: Start with 0.15-0.2 for best results. Increase only if too many irrelevant results.")
+        
+        # Advanced settings
+        use_reranker = st.checkbox("🚀 Use Cross-Encoder Reranker", value=True,
+                                   help="Dramatically improves answer quality by reranking top results. Small speed cost (~0.3s).")
+        
+        # Debug mode
+        use_cache = st.checkbox("Enable Response Cache", value=True, 
+                               help="Cache answers for 10 min. Disable to always retrieve fresh answers.")
         
         st.divider()
         
@@ -374,6 +506,21 @@ def main():
             st.metric("Vectors in FAISS", faiss_count)
             st.metric("Queries", len(st.session_state.query_history))
         
+        # Cache stats with clear button
+        from app.core.cache import get_cache
+        cache = get_cache()
+        cache_stats = cache.get_stats()
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.metric("Cached Responses", cache_stats['query_cache_size'], 
+                     help="Cached for 10 min. Auto-clears when docs change.")
+        with col2:
+            if st.button("🗑️ Clear", help="Clear cache to force fresh answers"):
+                cache.clear()
+                st.success("Cache cleared!")
+                st.rerun()
+        
         # Warning if mismatch
         if total_chunks > 0 and faiss_count == 0:
             st.warning("⚠️ Chunks in DB but no vectors in FAISS! Try re-uploading documents.")
@@ -382,8 +529,54 @@ def main():
         
         st.divider()
         
-        if st.button("🔄 Refresh Stats"):
-            st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Refresh Stats"):
+                st.rerun()
+        with col2:
+            if st.button("🔧 Rebuild Index"):
+                with st.spinner("Rebuilding FAISS index..."):
+                    try:
+                        # Rebuild index from database
+                        with components['db_manager'].get_session() as session:
+                            chunks = session.query(Chunk).all()
+                            
+                            if not chunks:
+                                st.warning("No chunks in database to index")
+                            else:
+                                # Re-embed all chunks
+                                chunk_texts = [c.chunk_text for c in chunks]
+                                embeddings = components['embedder'].embed_chunks(chunk_texts)
+                                
+                                # Create new index
+                                components['index_manager'].create_index()
+                                
+                                # Add all vectors
+                                metadata_list = [
+                                    {
+                                        'doc_id': c.doc_id,
+                                        'chunk_index': c.chunk_index,
+                                        'chunk_text': c.chunk_text[:200],
+                                        'start_char': c.start_char,
+                                        'end_char': c.end_char
+                                    }
+                                    for c in chunks
+                                ]
+                                
+                                faiss_ids = components['index_manager'].add_vectors(embeddings, metadata_list)
+                                
+                                # Update FAISS IDs
+                                for chunk, faiss_id in zip(chunks, faiss_ids):
+                                    chunk.faiss_id = faiss_id
+                                session.commit()
+                                
+                                # Save index
+                                components['index_manager'].save_index()
+                                
+                                st.success(f"✅ Index rebuilt with {len(faiss_ids)} vectors!")
+                                st.rerun()
+                    except Exception as e:
+                        st.error(f"Failed to rebuild index: {e}")
     
     # Tabs
     tab1, tab2, tab3 = st.tabs(["💬 Ask Questions", "📤 Upload Documents", "📜 History"])
@@ -409,24 +602,71 @@ def main():
         
         if ask_button and query:
             with st.spinner("🔍 Searching and generating answer..."):
-                result = answer_question(query, top_k, min_score, components)
+                result = answer_question(query, top_k, min_score, components, use_cache=use_cache, use_reranker=use_reranker)
                 
                 if result['success']:
-                    # Store in history
-                    st.session_state.query_history.append({
-                        'query': query,
-                        'answer': result['answer'],
-                        'timestamp': datetime.now(),
-                        'processing_time': result['processing_time']
-                    })
+                    # Get the answer
+                    answer = result.get('answer', '')
                     
-                    # Display answer
-                    st.success("Answer:")
-                    st.markdown(f"**{result['answer']}**")
-                    
-                    # Display metadata
-                    st.caption(f"⏱️ Processing time: {result['processing_time']:.2f}s | "
-                             f"📄 Retrieved: {result['retrieved_count']} chunks")
+                    # Check if answer is valid
+                    if not answer or len(answer.strip()) < 5:
+                        st.warning("⚠️ Could not generate a proper answer.")
+                        st.info(f"💡 Tip: Try lowering the similarity threshold to 0.1-0.2 or rephrase your question.")
+                        st.info(f"📊 Retrieved {result['retrieved_count']} chunks")
+                    else:
+                        # Store in history
+                        st.session_state.query_history.append({
+                            'query': query,
+                            'answer': answer,
+                            'timestamp': datetime.now(),
+                            'processing_time': result['processing_time']
+                        })
+                        
+                        # Display answer prominently with success message
+                        st.success("✅ Answer Generated Successfully!")
+                        
+                        # Show answer in a prominent box
+                        st.markdown("### 📝 Answer:")
+                        st.markdown(f"""
+                        <div style="background-color: #f0f2f6; padding: 20px; border-radius: 10px; border-left: 5px solid #4CAF50;">
+                            <p style="font-size: 16px; line-height: 1.6; margin: 0;">{answer}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Display metadata with prominent cache indicator
+                        is_cached = result.get('cached', False)
+                        if is_cached:
+                            st.info("⚡ **This answer was retrieved from cache** (saved from previous query)")
+                        else:
+                            reranker_text = " + reranking" if use_reranker else ""
+                            st.success(f"🔍 **Fresh answer generated** using retrieval{reranker_text} + LLM")
+                        
+                        # Show timing breakdown if available
+                        timings = result.get('timings', {})
+                        if timings and not is_cached:
+                            timing_parts = []
+                            if 'retrieval' in timings:
+                                timing_parts.append(f"⚡ retrieval: {timings['retrieval']:.3f}s")
+                            if 'reranking' in timings:
+                                timing_parts.append(f"🎯 reranking: {timings['reranking']:.3f}s")
+                            if 'llm' in timings:
+                                timing_parts.append(f"🤖 LLM: {timings['llm']:.3f}s")
+                            
+                            timing_str = " | ".join(timing_parts) if timing_parts else ""
+                            st.caption(f"⏱️ Total: {result['processing_time']:.3f}s ({timing_str})")
+                        else:
+                            cache_icon = "⚡" if is_cached else "⏱️"
+                            cache_text = " (cached)" if is_cached else ""
+                            st.caption(f"{cache_icon} Processing time: {result['processing_time']:.3f}s{cache_text}")
+                        
+                        st.caption(f"📄 Retrieved: {result['retrieved_count']} chunks")
+                        
+                        # Show verification if available
+                        verification = result.get('verification', {})
+                        if verification and not is_cached:
+                            coverage = verification.get('coverage_percent', 0)
+                            if coverage > 0:
+                                st.caption(f"✅ Answer verification: {coverage:.1f}% of answer words found in context")
                     
                     # Display sources
                     if result['sources']:
@@ -434,9 +674,13 @@ def main():
                         st.subheader("📑 Sources")
                         
                         for i, source in enumerate(result['sources'], 1):
+                            # Build score display
+                            score_text = f"Similarity: {source.get('score', 0):.3f}"
+                            if 'rerank_score' in source and use_reranker:
+                                score_text += f" | 🎯 Rerank: {source.get('rerank_score', 0):.3f}"
+                            
                             with st.expander(
-                                f"Source {i}: {source.get('filename', 'Unknown')} "
-                                f"(Score: {source.get('score', 0):.3f})"
+                                f"Source {i}: {source.get('filename', 'Unknown')} ({score_text})"
                             ):
                                 st.text(source.get('chunk_text', 'No text available'))
                                 st.caption(

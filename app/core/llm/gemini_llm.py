@@ -72,13 +72,12 @@ class GeminiLLM(BaseLLM):
         max_tokens = max_tokens or self.default_max_tokens
         temperature = temperature or self.default_temperature
         
-        # Try multiple model names as fallback
+        # Try multiple model names as fallback (November 2025 models)
         model_names_to_try = [
-            self.model,
-            "gemini-1.5-flash-latest",
-            "gemini-1.5-flash",
-            "gemini-pro",
-            "gemini-1.0-pro"
+            self.model,  # Try configured model first
+            "gemini-2.0-flash",  # Recommended - stable and fast
+            "gemini-2.0-flash-001",
+            "gemini-2.0-flash-lite"
         ]
         
         last_error = None
@@ -137,12 +136,26 @@ class GeminiLLM(BaseLLM):
                 # Extract generated text from Gemini response
                 if "candidates" in result and len(result["candidates"]) > 0:
                     candidate = result["candidates"][0]
+                    
+                    # Check for safety/finish reasons that might block content
+                    finish_reason = candidate.get("finishReason", "")
+                    if finish_reason == "SAFETY":
+                        return "⚠️ Response blocked due to safety filters. Try rephrasing your question."
+                    
                     if "content" in candidate:
                         content = candidate["content"]
                         if "parts" in content and len(content["parts"]) > 0:
-                            text = content["parts"][0].get("text", "")
-                            logger.info(f"Successfully generated response with model: {model_name}")
-                            return text
+                            # Check if parts has text
+                            if "text" in content["parts"][0]:
+                                text = content["parts"][0]["text"]
+                                logger.info(f"Successfully generated response with model: {model_name} ({len(text)} chars)")
+                                return text
+                            else:
+                                # Sometimes parts is empty due to MAX_TOKENS or other reasons
+                                logger.warning(f"No text in response parts. Finish reason: {finish_reason}")
+                                if finish_reason == "MAX_TOKENS":
+                                    return "⚠️ Response was truncated. The context may be too long. Try asking a more specific question."
+                                raise Exception(f"No text in response (finish: {finish_reason})")
                 
                 logger.warning(f"Unexpected Gemini response format: {result}")
                 raise Exception("Unexpected response format")
@@ -177,9 +190,78 @@ class GeminiLLM(BaseLLM):
             logger.error(f"Error calling Gemini API: {str(e)}")
             return f"Error: {str(e)}"
     
-    def stream_generate(self, prompt: str, max_tokens: int = None) -> str:
+    def stream_generate(self, prompt: str, max_tokens: int = None, temperature: float = None):
         """
-        Stream generation (not yet implemented for Gemini).
-        Falls back to regular generation.
+        Stream generation from Gemini API.
+        
+        Yields text chunks as they're generated for real-time display.
+        
+        Args:
+            prompt: Input prompt
+            max_tokens: Maximum tokens
+            temperature: Sampling temperature
+            
+        Yields:
+            Text chunks as they arrive
         """
-        return self.generate(prompt, max_tokens)
+        max_tokens = max_tokens or self.default_max_tokens
+        temperature = temperature or self.default_temperature
+        
+        # Try models in order
+        for model_name in ["gemini-2.0-flash", "gemini-2.0-flash-001"]:
+            try:
+                api_url = f"https://generativelanguage.googleapis.com/v1/models/{model_name}:streamGenerateContent"
+                
+                payload = {
+                    "contents": [{
+                        "parts": [{"text": prompt}]
+                    }],
+                    "generationConfig": {
+                        "temperature": temperature,
+                        "maxOutputTokens": max_tokens,
+                        "topP": 0.95,
+                        "topK": 40
+                    }
+                }
+                
+                url_with_key = f"{api_url}?key={self.api_key}&alt=sse"
+                
+                response = requests.post(
+                    url_with_key,
+                    headers={"Content-Type": "application/json"},
+                    json=payload,
+                    stream=True,
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    full_text = ""
+                    for line in response.iter_lines():
+                        if line:
+                            line = line.decode('utf-8')
+                            if line.startswith('data: '):
+                                try:
+                                    data = json.loads(line[6:])
+                                    if 'candidates' in data:
+                                        candidate = data['candidates'][0]
+                                        if 'content' in candidate and 'parts' in candidate['content']:
+                                            parts = candidate['content']['parts']
+                                            if parts and 'text' in parts[0]:
+                                                chunk = parts[0]['text']
+                                                full_text += chunk
+                                                yield chunk
+                                except json.JSONDecodeError:
+                                    continue
+                    
+                    if full_text:
+                        logger.info(f"Streamed {len(full_text)} chars from {model_name}")
+                        return
+                        
+            except Exception as e:
+                logger.warning(f"Streaming failed for {model_name}: {e}")
+                continue
+        
+        # Fallback to non-streaming
+        logger.warning("Streaming failed, falling back to regular generation")
+        result = self.generate(prompt, max_tokens, temperature)
+        yield result
